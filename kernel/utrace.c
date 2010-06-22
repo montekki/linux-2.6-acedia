@@ -228,6 +228,7 @@ static int utrace_add_engine(struct task_struct *target,
 	 */
 	list_add_tail(&engine->entry, &utrace->attaching);
 	utrace->pending_attach = 1;
+	utrace_engine_get(engine);
 	ret = 0;
 unlock:
 	spin_unlock(&utrace->lock);
@@ -301,10 +302,10 @@ struct utrace_engine *utrace_attach_task(
 		return ERR_PTR(-ENOMEM);
 
 	/*
-	 * Initialize the new engine structure.  It starts out with two
-	 * refs: one ref to return, and one ref for being attached.
+	 * Initialize the new engine structure.  It starts out with one ref
+	 * to return.  utrace_add_engine() adds another for being attached.
 	 */
-	kref_set(&engine->kref, 2);
+	kref_init(&engine->kref);
 	engine->flags = 0;
 	engine->ops = ops;
 	engine->data = data;
@@ -316,6 +317,7 @@ struct utrace_engine *utrace_attach_task(
 		kmem_cache_free(utrace_engine_cachep, engine);
 		engine = ERR_PTR(ret);
 	}
+
 
 	return engine;
 }
