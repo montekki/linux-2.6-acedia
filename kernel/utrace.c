@@ -526,7 +526,7 @@ int utrace_set_events(struct task_struct *target,
 {
 	struct utrace *utrace;
 	unsigned long old_flags, old_utrace_flags;
-	int ret;
+	int ret = -EALREADY;
 
 	/*
 	 * We just ignore the internal bit, so callers can use
@@ -544,15 +544,11 @@ int utrace_set_events(struct task_struct *target,
 	/* If ->death or ->reap is true we must see exit_state != 0. */
 	if (target->exit_state) {
 		if (utrace->death) {
-			if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS) {
-				spin_unlock(&utrace->lock);
-				return -EALREADY;
-			}
+			if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS)
+				goto unlock;
 		} else if (utrace->reap) {
-			if ((old_flags ^ events) & UTRACE_EVENT(REAP)) {
-				spin_unlock(&utrace->lock);
-				return -EALREADY;
-			}
+			if ((old_flags ^ events) & UTRACE_EVENT(REAP))
+				goto unlock;
 		}
 	}
 
@@ -570,8 +566,7 @@ int utrace_set_events(struct task_struct *target,
 		read_lock(&tasklist_lock);
 		if (unlikely(target->exit_state)) {
 			read_unlock(&tasklist_lock);
-			spin_unlock(&utrace->lock);
-			return -EALREADY;
+			goto unlock;
 		}
 		target->utrace_flags |= events;
 		read_unlock(&tasklist_lock);
@@ -599,7 +594,7 @@ int utrace_set_events(struct task_struct *target,
 		if (utrace->reporting == engine)
 			ret = -EINPROGRESS;
 	}
-
+unlock:
 	spin_unlock(&utrace->lock);
 
 	return ret;
