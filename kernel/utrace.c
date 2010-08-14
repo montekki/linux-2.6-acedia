@@ -541,13 +541,15 @@ int utrace_set_events(struct task_struct *target,
 	old_utrace_flags = target->utrace_flags;
 	old_flags = engine->flags & ~ENGINE_STOP;
 
-	if (target->exit_state &&
-	    (((events & ~old_flags) & _UTRACE_DEATH_EVENTS) ||
-	     (utrace->death &&
-	      ((old_flags & ~events) & _UTRACE_DEATH_EVENTS)) ||
-	     (utrace->reap && ((old_flags & ~events) & UTRACE_EVENT(REAP))))) {
-		spin_unlock(&utrace->lock);
-		return -EALREADY;
+	if (target->exit_state) {
+		unsigned long cleared = (old_flags & ~events);
+
+		if (((events & ~old_flags) & _UTRACE_DEATH_EVENTS) ||
+		    (utrace->death && (cleared & _UTRACE_DEATH_EVENTS)) ||
+		    (utrace->reap  && (cleared &  UTRACE_EVENT(REAP)))) {
+			spin_unlock(&utrace->lock);
+			return -EALREADY;
+		}
 	}
 
 	/*
