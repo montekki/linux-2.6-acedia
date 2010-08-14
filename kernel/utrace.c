@@ -543,12 +543,16 @@ int utrace_set_events(struct task_struct *target,
 
 	/* If ->death or ->reap is true we must see exit_state != 0. */
 	if (target->exit_state) {
-		unsigned long cleared = (old_flags & ~events);
-
-		if ((utrace->death && (cleared & _UTRACE_DEATH_EVENTS)) ||
-		    (utrace->reap  && (cleared &  UTRACE_EVENT(REAP)))) {
-			spin_unlock(&utrace->lock);
-			return -EALREADY;
+		if (utrace->death) {
+			if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS) {
+				spin_unlock(&utrace->lock);
+				return -EALREADY;
+			}
+		} else if (utrace->reap) {
+			if ((old_flags ^ events) & UTRACE_EVENT(REAP)) {
+				spin_unlock(&utrace->lock);
+				return -EALREADY;
+			}
 		}
 	}
 
