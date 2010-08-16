@@ -541,11 +541,11 @@ int utrace_set_events(struct task_struct *target,
 	old_utrace_flags = target->utrace_flags;
 	old_flags = engine->flags & ~ENGINE_STOP;
 
+	/* If ->death or ->reap is true we must see exit_state != 0. */
 	if (target->exit_state) {
 		unsigned long cleared = (old_flags & ~events);
 
-		if (((events & ~old_flags) & _UTRACE_DEATH_EVENTS) ||
-		    (utrace->death && (cleared & _UTRACE_DEATH_EVENTS)) ||
+		if ((utrace->death && (cleared & _UTRACE_DEATH_EVENTS)) ||
 		    (utrace->reap  && (cleared &  UTRACE_EVENT(REAP)))) {
 			spin_unlock(&utrace->lock);
 			return -EALREADY;
@@ -562,7 +562,7 @@ int utrace_set_events(struct task_struct *target,
 	 * knows positively that utrace_report_death() will be called or
 	 * that it won't.
 	 */
-	if ((events & ~old_utrace_flags) & _UTRACE_DEATH_EVENTS) {
+	if ((events & ~old_flags) & _UTRACE_DEATH_EVENTS) {
 		read_lock(&tasklist_lock);
 		if (unlikely(target->exit_state)) {
 			read_unlock(&tasklist_lock);
