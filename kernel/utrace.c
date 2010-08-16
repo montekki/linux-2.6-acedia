@@ -541,15 +541,10 @@ int utrace_set_events(struct task_struct *target,
 	old_utrace_flags = target->utrace_flags;
 	old_flags = engine->flags & ~ENGINE_STOP;
 
-	/* If ->death or ->reap is true we must see exit_state != 0. */
-	if (target->exit_state) {
-		if (utrace->death) {
-			if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS)
-				goto unlock;
-		} else if (utrace->reap) {
-			if ((old_flags ^ events) & UTRACE_EVENT(REAP))
-				goto unlock;
-		}
+	if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS) {
+		/* Too late if utrace_report_death() is in progress */
+		if (utrace->death)
+			goto unlock;
 	}
 
 	/*
