@@ -423,7 +423,7 @@ static struct utrace *get_utrace_lock(struct task_struct *target,
 
 	utrace = task_utrace_struct(target);
 	spin_lock(&utrace->lock);
-	if (unlikely(!engine->ops) ||
+	if (unlikely(utrace->reap) || unlikely(!engine->ops) ||
 	    unlikely(engine->ops == &utrace_detached_ops)) {
 		/*
 		 * By the time we got the utrace lock,
