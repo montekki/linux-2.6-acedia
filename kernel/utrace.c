@@ -489,13 +489,12 @@ static bool engine_wants_stop(struct utrace_engine *engine)
  *
  * This fails with -%EALREADY and does nothing if you try to clear
  * %UTRACE_EVENT(%DEATH) when the @report_death callback may already have
- * begun, if you try to clear %UTRACE_EVENT(%REAP) when the @report_reap
- * callback may already have begun, or if you try to newly set
- * %UTRACE_EVENT(%DEATH) or %UTRACE_EVENT(%QUIESCE) when @target is
- * already dead or dying.
+ * begun, or if you try to newly set %UTRACE_EVENT(%DEATH) or
+ * %UTRACE_EVENT(%QUIESCE) when @target is already dead or dying.
  *
- * This can fail with -%ESRCH when @target has already been detached,
- * including forcible detach on reaping.
+ * This fails with -%ESRCH if you try to clear %UTRACE_EVENT(%REAP) when
+ * the @report_reap callback may already have begun, or when @target has
+ * already been detached, including forcible detach on reaping.
  *
  * If @target was stopped before the call, then after a successful call,
  * no event callbacks not requested in @events will be made; if
@@ -541,11 +540,12 @@ int utrace_set_events(struct task_struct *target,
 	old_utrace_flags = target->utrace_flags;
 	old_flags = engine->flags & ~ENGINE_STOP;
 
-	if ((old_flags & ~events) &  _UTRACE_DEATH_EVENTS) {
-		/* Too late if utrace_report_death() is in progress */
-		if (utrace->death)
-			goto unlock;
-	}
+	/*
+	 * If utrace_report_death() is already progress now,
+	 * it's too late to clear the death event bits.
+	 */
+	if (((old_flags & ~events) & _UTRACE_DEATH_EVENTS) && utrace->death)
+		goto unlock;
 
 	/*
 	 * When setting these flags, it's essential that we really
