@@ -1527,7 +1527,7 @@ static const struct utrace_engine_ops *start_callback(
 	if (want & ENGINE_STOP)
 		report->action = UTRACE_STOP;
 
-	if (want & event) {
+	if (want & (event ?: UTRACE_EVENT(QUIESCE))) {
 		report->spurious = false;
 		return ops;
 	}
