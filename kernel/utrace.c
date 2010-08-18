@@ -1506,7 +1506,7 @@ static const struct utrace_engine_ops *start_callback(
 	smp_rmb();
 	ops = engine->ops;
 
-	if (want & UTRACE_EVENT(QUIESCE)) {
+	if ((want & UTRACE_EVENT(QUIESCE)) || ops == &utrace_detached_ops) {
 		if (finish_callback(task, utrace, report, engine,
 				    (*ops->report_quiesce)(report->action,
 							   engine, event)))
