@@ -1512,6 +1512,12 @@ static const struct utrace_engine_ops *start_callback(
 							   engine, event)))
 			return NULL;
 
+		if (!event) {
+			/* We only got here to report QUIESCE */
+			report->spurious = false;
+			return NULL;
+		}
+
 		/*
 		 * finish_callback() reset utrace->reporting after the
 		 * quiesce callback.  Now we set it again (as above)
@@ -1527,7 +1533,7 @@ static const struct utrace_engine_ops *start_callback(
 	if (want & ENGINE_STOP)
 		report->action = UTRACE_STOP;
 
-	if (want & (event ?: UTRACE_EVENT(QUIESCE))) {
+	if (want & event) {
 		report->spurious = false;
 		return ops;
 	}
