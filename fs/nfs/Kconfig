@@ -1,6 +1,7 @@
 config NFS_FS
 	tristate "NFS client support"
 	depends on INET && FILE_LOCKING
+	depends on BKL # fix as soon as lockd is done
 	select LOCKD
 	select SUNRPC
 	select NFS_ACL_SUPPORT if NFS_V3_ACL
@@ -117,3 +118,14 @@ config NFS_USE_KERNEL_DNS
 	select DNS_RESOLVER
 	select KEYS
 	default y
+
+config NFS_USE_NEW_IDMAPPER
+	bool "Use the new idmapper upcall routine"
+	depends on NFS_V4 && KEYS
+	help
+	  Say Y here if you want NFS to use the new idmapper upcall functions.
+	  You will need /sbin/request-key (usually provided by the keyutils
+	  package).  For details, read
+	  <file:Documentation/filesystems/nfs/idmapper.txt>.
+
+	  If you are unsure, say N.
