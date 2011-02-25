@@ -87,6 +87,8 @@
 #include "netlabel.h"
 #include "audit.h"
 
+#include "../../acedia/acedia_hooks.h"
+
 #define NUM_SEL_MNT_OPTS 5
 
 extern int selinux_nlmsg_lookup(u16 sclass, u16 nlmsg_type, u32 *perm);
@@ -2575,6 +2577,9 @@ static int selinux_inode_init_security(struct inode *inode, struct inode *dir,
 
 static int selinux_inode_create(struct inode *dir, struct dentry *dentry, int mask)
 {
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_inode_create(dir, dentry, mask);
+#endif
 	return may_create(dir, dentry, SECCLASS_FILE);
 }
 
@@ -2585,6 +2590,9 @@ static int selinux_inode_link(struct dentry *old_dentry, struct inode *dir, stru
 
 static int selinux_inode_unlink(struct inode *dir, struct dentry *dentry)
 {
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_inode_unlink(dir, dentry);
+#endif
 	return may_link(dir, dentry, MAY_UNLINK);
 }
 
@@ -2595,11 +2603,17 @@ static int selinux_inode_symlink(struct inode *dir, struct dentry *dentry, const
 
 static int selinux_inode_mkdir(struct inode *dir, struct dentry *dentry, int mask)
 {
+#ifdef ADEDIA_SELINUX_HOOKS
+	acedia_inode_mkdir(dir, entry, mask);
+#endif
 	return may_create(dir, dentry, SECCLASS_DIR);
 }
 
 static int selinux_inode_rmdir(struct inode *dir, struct dentry *dentry)
 {
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_inode_rmdir(dir, dentry);
+#endif
 	return may_link(dir, dentry, MAY_RMDIR);
 }
 
@@ -3173,6 +3187,9 @@ static int selinux_dentry_open(struct file *file, const struct cred *cred)
 
 static int selinux_task_create(unsigned long clone_flags)
 {
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_task_create(clone_flags);
+#endif
 	return current_has_perm(current, PROCESS__FORK);
 }
 
@@ -3384,6 +3401,9 @@ static int selinux_task_kill(struct task_struct *p, struct siginfo *info,
 	u32 perm;
 	int rc;
 
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_task_kill(p, info, sig, secid);
+#endif
 	if (!sig)
 		perm = PROCESS__SIGNULL; /* null signal; existence test */
 	else
@@ -3715,6 +3735,9 @@ static int selinux_socket_bind(struct socket *sock, struct sockaddr *address, in
 	u16 family;
 	int err;
 
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_socket_bind(sock, address, addrlen);
+#endif
 	err = sock_has_perm(current, sk, SOCKET__BIND);
 	if (err)
 		goto out;
@@ -3811,6 +3834,10 @@ static int selinux_socket_connect(struct socket *sock, struct sockaddr *address,
 	struct sk_security_struct *sksec = sk->sk_security;
 	int err;
 
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_socket_connect(sock, address, addrlen);
+#endif
+
 	err = sock_has_perm(current, sk, SOCKET__CONNECT);
 	if (err)
 		return err;
@@ -3861,6 +3888,9 @@ out:
 
 static int selinux_socket_listen(struct socket *sock, int backlog)
 {
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_socket_listen(sock, backlog);
+#endif
 	return sock_has_perm(current, sock->sk, SOCKET__LISTEN);
 }
 
@@ -3869,6 +3899,10 @@ static int selinux_socket_accept(struct socket *sock, struct socket *newsock)
 	int err;
 	struct inode_security_struct *isec;
 	struct inode_security_struct *newisec;
+
+#ifdef ACEDIA_SELINUX_HOOKS
+	acedia_socket_accept(sock, newsock);
+#endif
 
 	err = sock_has_perm(current, sock->sk, SOCKET__ACCEPT);
 	if (err)

@@ -29,6 +29,8 @@
 #include <linux/audit.h>
 #include <linux/uaccess.h>
 
+#include "../../acedia/acedia_hooks.h"
+
 /* selinuxfs pseudo filesystem for exporting the security policy API.
    Based on the proc code and the fs/nfsd/nfsctl.c code. */
 
@@ -1901,6 +1903,11 @@ struct vfsmount *selinuxfs_mount;
 static int __init init_sel_fs(void)
 {
 	int err;
+
+#ifdef ACEDIA_SELINUX_HOOKS
+	printk(KERN_INFO "SELinux: init acedia\n");
+	acedia_external_init();
+#endif
 
 	if (!selinux_enabled)
 		return 0;
