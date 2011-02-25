@@ -1,0 +1,28 @@
+.PHONY: all
+all: acedia_event_test acedia_driver_test
+
+acedia_driver_test: acedia_driver_test.c acedia_user.o
+		gcc -ggdb -o acedia_driver_test acedia_driver_test.c acedia_user.o
+
+acedia_event_test: acedia_event_test.o acedia_user.o acedia_user_event.o
+		gcc -ggdb -o acedia_event_test acedia_event_test.o acedia_user.o acedia_user_event.o
+
+acedia_user.o: acedia_user.c
+		gcc -ggdb -Wall -Wextra -Werror -c acedia_user.c
+
+acedia_event_test.o: acedia_event_test.c
+		gcc -ggdb -Wall -Wextra -Werror -c acedia_event_test.c
+
+acedia_user_event.o: acedia_event.c linux
+		gcc -ggdb -Wall -Wextra -Werror  -DSOOCH_EVENT_TEST -I. -include acedia_user_types.h -include string.h -include stdlib.h -c acedia_event.c -o acedia_user_event.o
+		rm linux/slab.h
+		rm -r linux
+
+linux:
+		mkdir linux
+		echo '#define kzalloc(a,b) malloc(a)' > linux/slab.h
+
+.PHONY: clean
+clean:
+		-rm acedia_event_test.o acedia_user.o acedia_user_event.o acedia_event_test
+

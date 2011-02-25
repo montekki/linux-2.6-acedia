@@ -1,0 +1,7 @@
+config SECURITY_ACEDIA
+	bool "Acedia security engine"
+    depends on UTRACE
+	default n
+	help
+	Hooks for REDSecure AURA events engine
+
