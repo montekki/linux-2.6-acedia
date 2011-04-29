@@ -183,7 +183,7 @@ static inline u32 task_sid(const struct task_struct *task)
 }
 
 /*
- * get the subjective security ID of the current task
+ * get the subjective security id of the current task
  */
 static inline u32 current_sid(void)
 {

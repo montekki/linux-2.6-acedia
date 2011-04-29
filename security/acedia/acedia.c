@@ -2,6 +2,8 @@
 #include <linux/in6.h>
 #include <linux/net.h>
 #include <linux/security.h>
+#include <linux/device.h>
+#include <linux/cdev.h>
 
 #include "acedia_dev.h"
 #include "acedia_engine.h"
@@ -11,6 +13,12 @@
 #include "acedia_hooks.h"
 
 #define MAX_PATH 1024
+
+static struct class *acedia_filter_class;
+static struct device acedia_dev;
+static struct cdev acedia_cdev;
+
+static dev_t acedia_devt;
 
 void acedia_get_filename(struct dentry *dentry, char* buf)
 {
@@ -388,13 +396,15 @@ struct file_operations acedia_file_ops = {
 	.read = acedia_dev_read,
 	.open = acedia_dev_open,
 	.release = acedia_dev_release,
-	// .ioctl = acedia_dev_ioctl,
+	.unlocked_ioctl = acedia_dev_ioctl,
 };
 
 void acedia_external_init(void)
 {
+	/*
 	if( register_chrdev(ACEDIA_MAJOR_NUMBER, ACEDIA_DEV_NAME, &acedia_file_ops) )
 		panic("Acedia: unable to register char dev.\n");
+	*/
 	acedia_queue_init();
 #ifdef ACEDIA_SUPPORT_UPROBES
 	acedia_uprobes_init();
@@ -404,9 +414,50 @@ EXPORT_SYMBOL_GPL(acedia_external_init);
 
 int __init acedia_init(void)
 {
+	int ret;
+
 	printk(KERN_INFO "Acedia: Hi, this is Acedia!\n");
 	printk(KERN_INFO "Acedia: perhaps you'd want to use 0x%lx and 0x%lx ioctl codes\n",
 		       	ACEDIA_ALLOW, ACEDIA_SETPID);
+
+	acedia_filter_class = class_create(THIS_MODULE, "acedia");
+
+	if (!acedia_filter_class) {
+		printk(KERN_ERR "Acedia: class_create() failed\n");
+		return -EFAULT;
+	}
+
+	printk(KERN_INFO "Acedia: registering chrdev_region\n");
+
+	ret = alloc_chrdev_region(&acedia_devt, 0,10,"acedia");
+
+	if (ret < 0) {
+		printk(KERN_ERR "Acedia: alloc_chrdev_region() failed\n");
+		return -EFAULT;
+	}
+
+	dev_set_name(&acedia_dev, "acedia");
+
+	cdev_init(&acedia_cdev,&acedia_file_ops);
+
+	acedia_cdev.ops = &acedia_file_ops;
+	acedia_dev.devt = MKDEV(MAJOR(acedia_devt),300);
+
+	acedia_cdev.owner = THIS_MODULE;
+
+	ret = cdev_add(&acedia_cdev, acedia_dev.devt, 1);
+
+	if (ret < 0) {
+		printk(KERN_ERR "acedia: failed to add char dev\n");
+		return -EFAULT;
+	}
+
+	ret = device_register(&acedia_dev);
+
+	if (ret) {
+		printk(KERN_ERR "Acedia: failed to register device\n");
+		return -EFAULT;
+	}
 
 	if (!security_module_enable(&acedia_ops))
 		return 0;

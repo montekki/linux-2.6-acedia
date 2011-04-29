@@ -104,6 +104,7 @@ int acedia_dev_release(struct inode *inode, struct file *file)
 
 int acedia_dev_open(struct inode *inode, struct file *file)
 {
+	printk( KERN_INFO "Acedia: openinig device\n");
 	// TODO: mutex
 	if (!disabled)
 		return -EBUSY;

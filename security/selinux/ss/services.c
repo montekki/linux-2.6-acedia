@@ -52,6 +52,7 @@
 #include <linux/selinux.h>
 #include <linux/flex_array.h>
 #include <linux/vmalloc.h>
+#include <linux/tracehook.h>
 #include <net/netlabel.h>
 
 #include "flask.h"
@@ -106,6 +107,254 @@ struct selinux_mapping {
 
 static struct selinux_mapping *current_mapping;
 static u16 current_mapping_size;
+
+/*
+ * get the security ID of a set of credentials
+ */
+static inline u32 cred_sid(const struct cred *cred)
+{
+	const struct task_security_struct *tsec;
+
+	tsec = cred->security;
+	return tsec->sid;
+}
+
+/*
+ * get the objective security ID of a task
+ */
+static inline u32 task_sid(const struct task_struct *task)
+{
+	u32 sid;
+
+	rcu_read_lock();
+	sid = cred_sid(__task_cred(task));
+	rcu_read_unlock();
+	return sid;
+}
+
+/* Check whether a task can create a key. */
+static int may_create_key(u32 ksid,
+			  struct task_struct *ctx)
+{
+	u32 sid = task_sid(ctx);
+
+	return avc_has_perm(sid, ksid, SECCLASS_KEY, KEY__CREATE, NULL);
+}
+
+/*
+ * get the subjective security id of the current task
+ */
+static inline u32 current_sid(void)
+{
+	const struct task_security_struct *tsec = current_security();
+
+	return tsec->sid;
+}
+
+/*
+ * Check permission between current and another task, e.g. signal checks,
+ * fork check, ptrace check, etc.
+ * current is the actor and tsk2 is the target
+ * - this uses current's subjective creds
+ */
+static int current_has_perm(const struct task_struct *tsk,
+			    u32 perms)
+{
+	u32 sid, tsid;
+
+	sid = current_sid();
+	tsid = task_sid(tsk);
+	return avc_has_perm(sid, tsid, SECCLASS_PROCESS, perms, NULL);
+}
+
+int security_kern_getprocattr(struct task_struct *p,
+			       char *name, char **value)
+{
+	const struct task_security_struct *__tsec;
+	u32 sid;
+	int error;
+	unsigned len;
+
+	if (current != p) {
+		error = current_has_perm(p, PROCESS__GETATTR);
+		if (error)
+			return error;
+	}
+
+	rcu_read_lock();
+	__tsec = __task_cred(p)->security;
+
+	if (!strcmp(name, "current"))
+		sid = __tsec->sid;
+	else if (!strcmp(name, "prev"))
+		sid = __tsec->osid;
+	else if (!strcmp(name, "exec"))
+		sid = __tsec->exec_sid;
+	else if (!strcmp(name, "fscreate"))
+		sid = __tsec->create_sid;
+	else if (!strcmp(name, "keycreate"))
+		sid = __tsec->keycreate_sid;
+	else if (!strcmp(name, "sockcreate"))
+		sid = __tsec->sockcreate_sid;
+	else
+		goto invalid;
+	rcu_read_unlock();
+
+	if (!sid)
+		return 0;
+
+	error = security_sid_to_context(sid, value, &len);
+	if (error)
+		return error;
+	return len;
+
+invalid:
+	rcu_read_unlock();
+	return -EINVAL;
+}
+
+int security_kern_setprocattr(struct task_struct *p,
+			       char *name, void *value, size_t size)
+{
+	struct task_security_struct *tsec;
+	struct task_struct *tracer;
+	struct cred *new;
+	u32 sid = 0, ptsid;
+	int error;
+	char *str = value;
+
+	/*
+	if (current != p) {
+	*/
+		/* SELinux only allows a process to change its own
+		   security attributes. */
+	/*
+		return -EACCES;
+	}
+	*/
+
+	/*
+	 * Basic control over ability to set these attributes at all.
+	 * current == p, but we'll pass them separately in case the
+	 * above restriction is ever removed.
+	 */
+	if (!strcmp(name, "exec"))
+		error = current_has_perm(p, PROCESS__SETEXEC);
+	else if (!strcmp(name, "fscreate"))
+		error = current_has_perm(p, PROCESS__SETFSCREATE);
+	else if (!strcmp(name, "keycreate"))
+		error = current_has_perm(p, PROCESS__SETKEYCREATE);
+	else if (!strcmp(name, "sockcreate"))
+		error = current_has_perm(p, PROCESS__SETSOCKCREATE);
+	else if (!strcmp(name, "current"))
+		error = current_has_perm(p, PROCESS__SETCURRENT);
+	else
+		error = -EINVAL;
+	if (error)
+		return error;
+
+	printk("acedia: here1\n");
+
+	/* Obtain a SID for the context, if one was specified. */
+	if (size && str[1] && str[1] != '\n') {
+		if (str[size-1] == '\n') {
+			str[size-1] = 0;
+			size--;
+		}
+		error = security_context_to_sid(value, size, &sid);
+		if (error == -EINVAL && !strcmp(name, "fscreate")) {
+			if (!capable(CAP_MAC_ADMIN))
+				return error;
+			error = security_context_to_sid_force(value, size,
+							      &sid);
+		}
+		if (error)
+			return error;
+	}
+
+	printk("acedia: here2\n");
+
+	new = prepare_creds();
+	if (!new)
+		return -ENOMEM;
+
+	/* Permission checking based on the specified context is
+	   performed during the actual operation (execve,
+	   open/mkdir/...), when we know the full context of the
+	   operation.  See selinux_bprm_set_creds for the execve
+	   checks and may_create for the file creation checks. The
+	   operation will then fail if the context is not permitted. */
+	tsec = new->security;
+	if (!strcmp(name, "exec")) {
+		tsec->exec_sid = sid;
+	} else if (!strcmp(name, "fscreate")) {
+		tsec->create_sid = sid;
+	} else if (!strcmp(name, "keycreate")) {
+		error = may_create_key(sid, p);
+		if (error)
+			goto abort_change;
+		tsec->keycreate_sid = sid;
+	} else if (!strcmp(name, "sockcreate")) {
+		tsec->sockcreate_sid = sid;
+	} else if (!strcmp(name, "current")) {
+
+		printk("acedia: here3\n");
+		error = -EINVAL;
+
+		if (sid == 0)
+			goto abort_change;
+
+		/* Only allow single threaded processes to change context */
+		/*
+		error = -EPERM;
+		if (!current_is_single_threaded()) {
+			error = security_bounded_transition(tsec->sid, sid);
+			if (error)
+				goto abort_change;
+		}
+		*/
+
+		/* Check permissions for the transition. */
+		/*
+		error = avc_has_perm(tsec->sid, sid, SECCLASS_PROCESS,
+				     PROCESS__DYNTRANSITION, NULL);
+
+		if (error)
+			goto abort_change;
+		*/
+
+		/* Check for ptracing, and update the task SID if ok.
+		   Otherwise, leave SID unchanged and fail. */
+		/*
+		ptsid = 0;
+		task_lock(p);
+		tracer = tracehook_tracer_task(p);
+		if (tracer)
+			ptsid = task_sid(tracer);
+		task_unlock(p);
+
+		if (tracer) {
+			error = avc_has_perm(ptsid, sid, SECCLASS_PROCESS,
+					     PROCESS__PTRACE, NULL);
+			if (error)
+				goto abort_change;
+		}
+		*/
+
+		tsec->sid = sid;
+	} else {
+		error = -EINVAL;
+		goto abort_change;
+	}
+
+	// commit_creds(new);
+	p->real_cred = new;
+	return size;
+
+abort_change:
+	abort_creds(new);
+	return error;
+}
 
 static int selinux_set_mapping(struct policydb *pol,
 			       struct security_class_mapping *map,

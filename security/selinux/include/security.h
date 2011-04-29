@@ -10,6 +10,7 @@
 
 #include <linux/magic.h>
 #include <linux/types.h>
+#include <linux/selinux.h>
 #include "flask.h"
 
 #define SECSID_NULL			0x00000000 /* unspecified SID */
