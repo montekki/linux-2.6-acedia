@@ -20,6 +20,20 @@ struct kern_ipc_perm;
 
 #ifdef CONFIG_SECURITY_SELINUX
 
+int selinux_string_to_sid(char *str, size_t size, u32 *sid);
+int selinux_secmark_relabel_packet_permission(u32 sid);
+int selinux_kern_getprocattr(struct task_struct *p,
+		char *name, char **value );
+
+int selinux_kern_setprocattr(struct task_struct *p,
+		char *name, void *value, size_t size);
+
+int security_kern_setprocattr(struct task_struct *p,
+		char *name, void *value, size_t size);
+
+int security_kern_getprocattr(struct task_struct *p,
+		char *name, char **value);
+
 /**
  * selinux_is_enabled - is SELinux enabled?
  */
